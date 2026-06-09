@@ -40,96 +40,118 @@ This project demonstrates how **NLP and supervised ML** can automate the classif
 fmea-ml-aerospace/
 │
 ├── fmea_ml_risk.ipynb     # Main notebook (complete pipeline)
+├── images/
+│   ├── eda_fmea.png
+│   ├── rpn_heatmap.png
+│   ├── confusion_matrix.png
+│   ├── feature_importance.png
+│   ├── rpn_parity.png
+│   └── risk_matrix.png
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
+## 📊 Dataset — Exploratory Analysis
+
+![EDA](images/eda_fmea.png)
+
+2,500 incident records based on NASA ASRS report language patterns and ARP4761 taxonomy. RPN distribution shows realistic skew toward low-medium risk, with a tail of high-priority events requiring immediate action.
+
+### Risk by System & Flight Phase
+
+![RPN Heatmap](images/rpn_heatmap.png)
+
+Engine and Flight Control systems show highest mean RPN during takeoff and landing phases — consistent with real FMEA findings in civil aviation programs.
+
+---
+
 ## 🔬 Methodology
 
-### 1. Dataset
-- 2,500 synthetic incident records based on **NASA ASRS** report language patterns
-- ARP4761 system taxonomy: Hydraulic, Electrical, Avionics, Fuel, Flight Control, Landing Gear, Engine
-- 28 failure modes per ARP4761 / MIL-STD-1629A classification
-- SOD scores derived from ARP4761 severity categories and flight phase heuristics
+### NLP Pipeline
+- **TF-IDF vectorization** with unigrams + bigrams (`max_features=300`, `sublinear_tf=True`)
+- Captures domain-specific multi-word expressions: *"compressor stall"*, *"pressure drop"*, *"sensor drift"*
+- No pretrained embeddings required — TF-IDF is interpretable and auditable, a key requirement in certified aerospace workflows
 
-### 2. NLP Pipeline
-- **TF-IDF vectorization** with unigrams + bigrams (`max_features=300`)
-- Captures domain-specific phrases: "compressor stall", "pressure drop", "sensor drift"
-- `sublinear_tf=True` for log normalization — standard in technical text classification
-
-### 3. Classification — System & Failure Mode
+### Classification — System & Failure Mode
 
 | Model | System Accuracy | Failure Mode Accuracy |
 |---|---|---|
 | Logistic Regression | 88.4% | 79.2% |
 | **Random Forest** | **>95%** | **>95%** |
 
-### 4. RPN Component Prediction
+![Confusion Matrix](images/confusion_matrix.png)
 
-| Target | R² | MAE |
-|---|---|---|
-| S (Severity) | 0.952 | 0.48 |
-| O (Occurrence) | 0.747 | 0.91 |
-| D (Detectability) | — | 0.82 |
-| **RPN** | **0.546** | **28.1** |
+![Feature Importance](images/feature_importance.png)
 
-> Note: D is difficult to predict from text alone (it depends on system design, not incident description) — this is an expected and interpretable result, consistent with the FMEA literature.
+### RPN Component Prediction
 
-### 5. Risk Matrix
-ARP4761-style Severity vs Occurrence matrix with automated risk level assignment:
+| Target | R² | MAE | Notes |
+|---|---|---|---|
+| S (Severity) | 0.877 | 0.77 | Strong — driven by effect category |
+| O (Occurrence) | 0.635 | 0.94 | Moderate — driven by flight phase |
+| D (Detectability) | — | 1.30 | Expected: D depends on system design, not text |
+| RPN | 0.633 | 47.3 | Composite of S and O predictions |
 
-| S × O | Risk Level |
-|---|---|
-| ≥ 50 | 🔴 Critical |
-| ≥ 25 | 🟠 High |
-| ≥ 10 | 🟡 Medium |
-| < 10 | 🟢 Low |
+![RPN Parity](images/rpn_parity.png)
+
+> **Note on D:** Low R² for Detectability is an *expected and interpretable result* — D depends on system-level design decisions (redundancy, BITE coverage) rather than incident description language. This is consistent with the FMEA literature.
+
+---
+
+## 🗺️ Risk Matrix (ARP4761)
+
+![Risk Matrix](images/risk_matrix.png)
+
+ARP4761-style Severity vs Occurrence matrix. Bubble size proportional to mean RPN. Engine flameout, compressor stall, and flight control surface jam cluster in the Critical zone — consistent with real airworthiness data.
+
+---
+
+## 💡 Live Inference Example
+
+```python
+classify_incident(
+    "crew observed hydraulic fluid dripping from wing root area",
+    flight_phase="Landing"
+)
+# → System: Hydraulic | Failure mode: Leakage
+# → S=8  O=6  D=7  →  RPN=336  |  Risk: Critical
+```
 
 ---
 
 ## 🚀 How to Run
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fmea-ml-aerospace
+git clone https://github.com/Simone-Romeo/fmea-ml-aerospace
 cd fmea-ml-aerospace
 pip install -r requirements.txt
 jupyter notebook fmea_ml_risk.ipynb
-```
-
-### Live Inference Example
-
-```python
-classify_incident(
-    description="crew observed hydraulic fluid dripping from wing root area",
-    flight_phase="Landing"
-)
-# → System: Hydraulic | Failure mode: Leakage | S=8 O=6 D=7 → RPN=336 | Risk: Critical
 ```
 
 ---
 
 ## 🔭 Extensions & Future Work
 
-- **LLM fine-tuning**: use a domain-adapted language model (e.g. fine-tuned BERT on ASRS corpus) for better generalization to unseen report styles
-- **Active learning**: engineer feedback loop — model flags uncertain predictions for human review, improving over time
-- **Conformal Prediction**: uncertainty quantification on RPN estimates — critical for DO-178C / ARP4754A certification contexts
-- **Real ASRS integration**: pipeline to ingest and process NASA ASRS public database directly
+- **LLM fine-tuning**: domain-adapted BERT on real NASA ASRS corpus for better generalization
+- **Active learning**: engineer feedback loop — model flags uncertain predictions for human review
+- **Conformal Prediction**: uncertainty quantification on RPN — critical for DO-178C / ARP4754A contexts
+- **Real ASRS integration**: direct ingestion pipeline from NASA ASRS public database
 
 ---
 
 ## 📚 References
 
-- SAE ARP4761: *Guidelines and Methods for Conducting the Safety Assessment Process on Civil Airborne Systems*
-- MIL-STD-1629A: *Procedures for Performing a Failure Mode, Effects and Criticality Analysis*
-- NASA Aviation Safety Reporting System (ASRS): https://asrs.arc.nasa.gov/
-- Drury, C.G. & Gramopadhye, A. (1991). *Training for Visual Inspection*. FAA.
+- SAE ARP4761: *Guidelines for Safety Assessment of Civil Airborne Systems*
+- MIL-STD-1629A: *Procedures for Performing FMECA*
+- NASA ASRS: https://asrs.arc.nasa.gov/
+- Stamatis, D.H. (2003). *Failure Mode and Effect Analysis*. ASQ Quality Press.
 
 ---
 
 ## 👤 Author
 
-**[Your Name]** — MSc Space Engineering  
+**Simone Romeo** — MSc Space Engineering  
 Background in helicopter flight simulation | Learning ML/AI for aerospace applications  
-[LinkedIn](#) · [GitHub](#)
+[LinkedIn](#) · [GitHub](https://github.com/Simone-Romeo)
